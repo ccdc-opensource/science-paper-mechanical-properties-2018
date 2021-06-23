@@ -1,6 +1,5 @@
 # Mechanical Properties Script
 
----
 
 Supporting code for https://doi.org/10.1039/C8CE00454D
 
@@ -8,7 +7,6 @@ Supporting code for https://doi.org/10.1039/C8CE00454D
 
 # Using Script
 
----
 The `mechanical_properties.py` script can be used through the command line.
 
 First we activate the miniconda that contains the `csd-python-api`.
@@ -37,6 +35,5 @@ python mechanical_properties.py REF_CODE --s true
 
 # Dependencies:
 
----
 
 - [CSD-Python-API](https://ccdc-cambridge.slack.com/archives/DQ88Q1VNJ/p1624458665065900)
