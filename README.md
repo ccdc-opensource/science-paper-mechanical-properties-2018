@@ -14,13 +14,13 @@ The `mechanical_properties.py` script can be used through the command line.
 First we activate the miniconda that contains the `csd-python-api`.
 
 ```commandline
-> "C:\Program Files\CCDC\Python_API_2021\miniconda\condabin\activate.bat"
+"C:\Program Files\CCDC\Python_API_2021\miniconda\condabin\activate.bat"
 ```
 
-The script can then be run for a given ref code from the CSD.
+The script can then be run for a given ref code from the CSD or a `.cif` file.
 
 ```commandline
-> python mechanical_properties.py <REF_CODE> 
+python mechanical_properties.py REF_CODE|file_name.cif
 ```
 
 Output will then be printed to the console.
@@ -30,9 +30,9 @@ extend the search from [-4 -4 -4] to [4 4 4]. This range can be explicitly set, 
 suppressed.
 
 ```commandline
-> python mechanical_properties.py <REF_CODE> --p low #low precision
-> python mechanical_properties.py <REF_CODE> --p high #high precision 
-> python mechanical_properties.py <REF_CODE> --s true #Supress further seraching 
+python mechanical_properties.py REF_CODE --p low 
+python mechanical_properties.py REF_CODE --p high 
+python mechanical_properties.py REF_CODE --s true 
 ```
 
 # Dependencies:
