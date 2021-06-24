@@ -15,7 +15,7 @@ First we activate the miniconda that contains the `csd-python-api`.
 "C:\Program Files\CCDC\Python_API_2021\miniconda\condabin\activate.bat"
 ```
 
-The script can then be run for a given ref code from the CSD or a `.cif` file.
+The script can then be run for a given refcode from the CSD or a `.cif` file.
 
 ```commandline
 python mechanical_properties.py REF_CODE|file_name.cif
@@ -36,4 +36,4 @@ python mechanical_properties.py REF_CODE --s true
 # Dependencies:
 
 
-- [CSD-Python-API](https://ccdc-cambridge.slack.com/archives/DQ88Q1VNJ/p1624458665065900)
+- [CSD-Python-API](https://www.ccdc.cam.ac.uk/solutions/csd-core/components/csd-python-api/)
