@@ -256,7 +256,7 @@ def measure_angle(a, b, c):
 
 
 def calculate_slabs(h, k, l, crystal):
-    """Calculate the bottom and top slabs for the plane"""
+    """Calculate the bottom and top slabs for the given plane"""
     slab1, g1 = calc_slab(h, k, l, -4.8, 30, 10, crystal, 'centroid')
     slab2, g2 = calc_slab(h, k, l, 5.01, 30, 10, crystal, 'centroid')
     slab1atoms = [[c for c in a.coordinates] for a in slab1.atoms]
