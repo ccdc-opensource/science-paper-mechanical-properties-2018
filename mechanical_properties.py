@@ -11,7 +11,7 @@
     Run from the command-line
 """
 
-from ccdc.io import EntryReader
+from ccdc.io import CrystalReader
 from ccdc._lib import MathsLib
 from ccdc.descriptors import GeometricDescriptors, MolecularDescriptors
 from collections import OrderedDict
@@ -32,7 +32,7 @@ def vector_euclidean(p1, p2):
     return np.sqrt((abs(p1.x() - p2.x()) ** 2) + (abs(p1.y() - p2.y()) ** 2) + (abs(p1.z() - p2.z()) ** 2))
 
 
-def plane_order(red, entry, filetype):
+def plane_order(red, crystal):
     """
     Assigns the correct periodicity to the plane
     - ie. 101, 202, 303 or 404 based on its periodicity across the unit cell, not just relative to the origin position
@@ -48,10 +48,10 @@ def plane_order(red, entry, filetype):
     for n in range(1, 5):
         try:
             typ[n] = len([atom for atom in calc_slab(n * h, n * k, n * l,
-                                                     0, 30, 1.8, entry, filetype, 'only')[0].atoms
+                                                     0, 30, 1.8, crystal, 'only')[0].atoms
                           if atom.atomic_symbol == 'C'])
             pop[n] = len([atom for atom in calc_slab(n * h, n * k, n * l,
-                                                     0, 30, 1.8, entry, filetype, 'only')[0].atoms])
+                                                     0, 30, 1.8, crystal, 'only')[0].atoms])
         except ValueError:
             typ[n] = 0
             pop[n] = 0
@@ -205,19 +205,8 @@ def get_vector(cell_params, hkl):
     return xyz * -100
 
 
-def calc_slab(h, k, l, disp, wth, thk, ipt, filetype, *args):
+def calc_slab(h, k, l, disp, wth, thk, crystal, *args):
     """Calculate slab of atoms representing the miller plane given"""
-    if filetype == 'refcode':
-        reader = EntryReader('CSD')
-        entry = reader.entry(ipt.upper())
-    else:
-        entry = EntryReader(ipt)[0]
-
-    crystal = entry.crystal
-    mol = crystal.molecule
-    mol.assign_bond_types()
-    mol.add_hydrogens(mode='missing')
-    crystal.molecule = mol
     slab = crystal.slicing(crystal.miller_indices(int(h), int(k), int(l)).plane,
                            width=wth, displacement=disp, thickness=thk, inclusion=args[0])
     return slab, slab.centre_of_geometry()
@@ -266,10 +255,10 @@ def measure_angle(a, b, c):
     return np.degrees(np.arccos(np.clip(np.dot(u1, u2), -1.0, 1.0)))
 
 
-def calculate_slabs(h, k, l, ipt, filetype):
-    """Calculate the bottom and top slabs for the plane"""
-    slab1, g1 = calc_slab(h, k, l, -4.8, 30, 10, ipt, filetype, 'centroid')
-    slab2, g2 = calc_slab(h, k, l, 5.01, 30, 10, ipt, filetype, 'centroid')
+def calculate_slabs(h, k, l, crystal):
+    """Calculate the bottom and top slabs for the given plane"""
+    slab1, g1 = calc_slab(h, k, l, -4.8, 30, 10, crystal, 'centroid')
+    slab2, g2 = calc_slab(h, k, l, 5.01, 30, 10, crystal, 'centroid')
     slab1atoms = [[c for c in a.coordinates] for a in slab1.atoms]
     slab2atoms = [[c for c in a.coordinates] for a in slab2.atoms]
     for component in slab2.components:
@@ -280,31 +269,22 @@ def calculate_slabs(h, k, l, ipt, filetype):
     return slab1atoms, g1, slab2atoms, g2, slab1, slab2
 
 
-def get_overlap(h, k, l, slab1atoms, g1, slab2atoms, g2, ipt, filetype):
+def get_overlap(h, k, l, slab1atoms, g1, slab2atoms, g2, crystal):
     """Calculates interdigitation between slabs"""
-    if filetype == 'refcode':
-        reader = EntryReader('CSD')
-        crystal = reader.crystal(ipt.upper())
-    else:
-        crystal = EntryReader(ipt)[0].crystal
-    mol = crystal.molecule
-    mol.assign_bond_types()
-    mol.add_hydrogens(mode='missing')  # Add any missing hydrogens into ideal positions
-    crystal.molecule = mol
     plane = crystal.miller_indices(int(h), int(k), int(l)).plane  # Generate plane object for the Miller plane
     divide = slab_divider(plane, slab1atoms, g1, slab2atoms, g2)  # Correctly position plane at the interface
     overlap = interdigitation(plane, slab2atoms, divide)[0]  # Measure maximum atomic displacement past interface
     return [(h, k, l), round(overlap, 2)]
 
 
-def filter_and_run(slices, ipt, filetype):
+def filter_and_run(slices, crystal):
     """Filters out duplicate slice interfaces and runs the analysis using the "get_overlap" function"""
     corrugation = []
     for hkl in slices:
         h, k, l = hkl
         if not (-1 * h, -1 * k, -1 * l) in [x[0] for x in corrugation] and [h, k, l] != [0, 0, 0]:
-            s1, g1, s2, g2, sl1, sl2, = calculate_slabs(h, k, l, ipt, filetype)
-            corrugation.append(get_overlap(h, k, l, s1, g1, s2, g2, ipt, filetype))
+            s1, g1, s2, g2, sl1, sl2, = calculate_slabs(h, k, l, crystal)
+            corrugation.append(get_overlap(h, k, l, s1, g1, s2, g2, crystal))
     return sorted(corrugation, key=lambda xx: xx[1])
 
 
@@ -356,21 +336,10 @@ def detect_interslab_hbonds(slab1, slab2):
         return False
 
 
-def hbonds_between_layers(ipt, filetype, h, k, l):
+def hbonds_between_layers(crystal, h, k, l):
     """This function analyses the Hydrogen bonding of the crystal"""
 
-    top, c1, bottom, c2, sl1, sl2 = calculate_slabs(h, k, l, ipt, filetype)  # Generate the slab to analyse for bridging
-    if filetype == 'refcode':
-        reader = EntryReader('CSD')
-        entry = reader.entry(ipt.upper())
-    else:
-        entry = EntryReader(ipt)[0]
-
-    crystal = entry.crystal
-    mol = crystal.molecule
-    mol.assign_bond_types()
-    mol.add_hydrogens(mode='missing')
-    crystal.molecule = mol
+    top, c1, bottom, c2, sl1, sl2 = calculate_slabs(h, k, l, crystal)  # Generate the slab to analyse for bridging
     if not crystal.hbonds():  # If there are no hydrogen bonds at all
         return False, 'No Hydrogen Bonds'
 
@@ -415,18 +384,13 @@ def dimensionality(fig):
         return 'Lattice (3D)'
 
 
-def generate_descriptors(corrugation, entry, filetype, ipt):
+def generate_descriptors(corrugation, crystal):
     """Take the predicted flattest plane from the list "corrugation" and generate the subsequent descriptors"""
-    crystal = entry.crystal
-    mol = crystal.molecule
-    mol.assign_bond_types()
-    mol.add_hydrogens(mode='missing')
-    crystal.molecule = mol
     slip_planes = [plane for plane in corrugation if plane[1] > 0]  # List of all separated planes
     # Are any additional planes found at >45 degrees to the most separated plane?
     perpendicular = len([sp for sp in slip_planes[:-1] if 45 < plane_angles(sp[0], slip_planes[-1][0], crystal) < 135])
     # Take predicted slip plane, and assign the correct periodicity (origin independant index)
-    final_plane = plane_order(corrugation[-1][0], ipt, filetype)
+    final_plane = plane_order(corrugation[-1][0], crystal)
     final_separation = corrugation[-1][1]  # The separation/interdigitation decriptor
     spacing = crystal.miller_indices(int(final_plane[0]),
                                      int(final_plane[1]),
@@ -437,7 +401,7 @@ def generate_descriptors(corrugation, entry, filetype, ipt):
 
     # Run Hbonding analysis (see hbonds_between_layers function), and print out the resulting descriptors
     if final_separation < 0:
-        hbound, hbond_dims = hbonds_between_layers(ipt, filetype, *final_plane)  # Calculate Hbond descriptors
+        hbound, hbond_dims = hbonds_between_layers(crystal, *final_plane)  # Calculate Hbond descriptors
         print('No unobstructed slip plane, Most probable slip-plane: {} - interlocked by  = {} '.format(
             final_plane, final_separation * 2))
 
@@ -448,7 +412,7 @@ def generate_descriptors(corrugation, entry, filetype, ipt):
 
     else:
         for n, slc in enumerate(slip_planes):
-            hbound, hbond_dims = hbonds_between_layers(ipt, filetype, *slc[0])  # Calculate Hbond descriptors
+            hbound, hbond_dims = hbonds_between_layers(crystal, *slc[0])  # Calculate Hbond descriptors
             slip_planes[n].append(hbound)
 
         if perpendicular > 0:
@@ -482,13 +446,20 @@ def generate_descriptors(corrugation, entry, filetype, ipt):
     print('Overall hydrogen bonding network: {}'.format(hbond_dims))
 
 
-def calc_slip_planes(ipt, precision, extend, filetype):
-    """Import entry object from either CSD or from file provided"""
+def calc_slip_planes(ipt, precision, extend, suppress, filetype):
+    """Import crystal object from either CSD or from file provided"""
     if filetype == 'refcode':
-        reader = EntryReader('CSD')
-        entry = reader.entry(ipt.upper())
+        reader = CrystalReader('CSD')
+        crystal = reader.crystal(ipt.upper())
     else:
-        entry = EntryReader(ipt)[0]
+        crystal = CrystalReader(ipt)[0]
+    
+    if not suppress:
+        mol = crystal.molecule
+        mol.assign_bond_types()
+        mol.add_hydrogens(mode='missing')
+        crystal.molecule = mol
+        print("Added missing hydrogen atoms and assigned bond types")
 
     # Generate a list if miller planes to iterate over.
     if precision == 'h':  # If the precision has been manually set to high, scan to 444 from the beginning
@@ -497,7 +468,7 @@ def calc_slip_planes(ipt, precision, extend, filetype):
         slices = itertools.product([2, 1, 0, -1, -2], repeat=3)
 
     # Run the analysis on the list of slip planes
-    corrugation = filter_and_run(slices, ipt, filetype)  # generate a list of slip planes, sorted by their separation
+    corrugation = filter_and_run(slices, crystal)  # generate a list of slip planes, sorted by their separation
 
     # Check for the presence of separated planes in the list "corrugation"
     # If no slip planes are separated, the additional scan isn't suppressed in the input arguments, and the
@@ -506,12 +477,12 @@ def calc_slip_planes(ipt, precision, extend, filetype):
         print('No clear slip planes found between miller sets -2-2-2 and 222, performing more extensive search')
         slices = [x for x in itertools.product([4, 3, 2, 1, 0, -1, -2, -3, -4], repeat=3)
                   if x not in itertools.product([2, 1, 0, -1, -2], repeat=3)]
-        corrugation2 = filter_and_run(slices, ipt, filetype)
+        corrugation2 = filter_and_run(slices, crystal)
         for dat in corrugation2:
             corrugation.append(dat)  # Add additional data to the planes list
 
     corrugation = slip_order(corrugation)  # Strip out duplicate planes with the same spacing
-    generate_descriptors(corrugation, entry, filetype, ipt)  # Final plane analysis and generate the descriptors
+    generate_descriptors(corrugation, crystal)  # Final plane analysis and generate the descriptors
 
 
 if __name__ == '__main__':
@@ -522,6 +493,7 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description='''Enter refcode or cif file''')
     parser.add_argument("entry", help="Provide CSD refcode or path to file")
+    parser.add_argument("--e", help="suppress structure edit", default=False, action="store_true")  # Suppress normalisation of bond types and addition of missing hydrogens
     parser.add_argument("--p", help="precision (high/low)")  # Explicitly sets the miller plane search to [222] or [444]
     parser.add_argument("--s", help="suppress further search- 't' or 'true'")  # Suppress run to [444]
     inputs = parser.parse_args()
@@ -569,4 +541,4 @@ if __name__ == '__main__':
     else:
         inputs.p = 'l'
 
-    calc_slip_planes(inputs.entry, inputs.p, inputs.s, ext)  # Run main program
+    calc_slip_planes(inputs.entry, inputs.p, inputs.s, inputs.e, ext)  # Run main program
